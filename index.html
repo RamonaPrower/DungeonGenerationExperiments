@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet"
+        integrity="sha384-GLhlTQ8iRABdZLl6O3oVMWSktQOp6b7In1Zl3/Jr59b6EGGoI1aFkw7cmDA6j6gD" crossorigin="anonymous">
+    <link rel="stylesheet" href="./index.css">
+    <title>Dungeon Generation Testing</title>
+</head>
+
+<body>
+    <div class="container">
+        <div class="my-3 align-items-center">
+            <button id="regenerate" class="btn btn-primary">Regenerate</button>
+            <button class="btn btn-primary" type="button" data-bs-toggle="offcanvas" data-bs-target="#offcanvasLog"
+                aria-controls="offcanvasLog">Log</button>
+            <button class="btn btn-primary" type="button" data-bs-toggle="offcanvas" data-bs-target="#offcanvasAdv"
+                aria-controls="offcanvasAdv">Options</button>
+        </div>
+
+    </div>
+
+    <div id="testDiv">
+    </div>
+    <div class="offcanvas offcanvas-end" tabindex="-1" id="offcanvasLog" data-bs-backdrop="false"
+        aria-labelledby="offcanvasLogLabel">
+        <div class="offcanvas-header">
+            <h5 class="offcanvas-title" id="offcanvasLogLabel">Log</h5>
+            <button type="button" class="btn btn-outline-dark" id="logClear">Clear</button>
+            <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" role="switch" id="autoClearSwitch">
+                <label class="form-check-label" for="autoClearSwitch">Auto-Clear?</label>
+            </div>
+            <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+        </div>
+        <div class="offcanvas-body" id="logContainer">
+        </div>
+    </div>
+    <div class="offcanvas offcanvas-end" tabindex="-1" id="offcanvasAdv" data-bs-backdrop="false"
+        aria-labelledby="offcanvasAdvLabel">
+        <div class="offcanvas-header">
+            <h5 class="offcanvas-title" id="offcanvasAdvLabel">Options</h5>
+            <button type="button" class="btn btn-outline-dark" id="defaultOptions">Default</button>
+            <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+        </div>
+        <div class="offcanvas-body" id="optionsContainer">
+            <div class="mb-3">
+                <label for="row" class="form-label">Dungeon Size</label>
+                <input type="number" name="row" id="dungeonRow" value="32"> X
+                <input type="number" name="col" id="dungeonCol" value="40">
+            </div>
+            <div class="mb-3">
+                <label for="room" class="form-label">Dungeon Room Number</label>
+                <input type="number" name="room" id="dungeonRoom" value="8">
+            </div>
+            <div class="mb-3">
+                <label for="room" class="form-label">Min Room Size</label>
+                <input type="number" name="dungeonRoomMinX" id="dungeonRoomMinX" value="3"> X
+                <input type="number" name="dungeonRoomMinY" id="dungeonRoomMinY" value="3">
+            </div>
+            <div class="mb-3">
+                <label for="room" class="form-label">Max Room Size</label>
+                <input type="number" name="dungeonRoomMaxX" id="dungeonRoomMaxX" value="7"> X
+                <input type="number" name="dungeonRoomMaxY" id="dungeonRoomMaxY" value="7">
+            </div>
+        </div>
+    </div>
+
+</body>
+<script src="./index.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"
+    integrity="sha384-w76AqPfDkMBDXo30jS1Sgez6pr3x5MlQ1ZAGC+nuZB+EYdgRZgiwxhTBTkF7CXvN"
+    crossorigin="anonymous"></script>
+
+</html>
