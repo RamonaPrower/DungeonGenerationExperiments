@@ -52,7 +52,7 @@ function generateDungeon() {
 
     // board is a 2D array, [x][y]
 
-    let board = [...Array(Number(colCount))].map(() => Array(Number(rowCount)));
+    const board = [...Array(Number(colCount))].map(() => Array(Number(rowCount)));
     for (let i = 0; i < board.length; i++) {
         for (let j = 0; j < board[i].length; j++) {
             board[i][j] = 0;
@@ -84,6 +84,7 @@ function generateDungeon() {
 
     const roomList = [];
     const gridList = [];
+    const pointList = [];
 
     // if the roomCount isn't divisible by 2 or 3, then it's not possible to split the board into rooms
     // add 1 to the roomCount until it is divisible by 2 or 3
@@ -112,6 +113,7 @@ function generateDungeon() {
                     y: j * splitRow,
                     width: splitCol,
                     height: splitRow,
+                    index: gridList.length,
                 };
                 gridList.push(grid);
             }
@@ -139,137 +141,152 @@ function generateDungeon() {
                     y: i * splitRow,
                     width: splitCol,
                     height: splitRow,
+                    index: gridList.length,
                 };
                 gridList.push(grid);
             }
         }
     }
+    // in this iteration, we follow a backwards approach
+    // generating the paths first, then fitting the rooms onto valid spaces on the paths
 
+    // pick a point per grid to start from
+    for (let i = 0; i < gridList.length; i++) {
+        const grid = gridList[i];
+        // both x and y need to make sure that they are not on the edge of the grid (ideally by the minimum room size)
+        const minX = grid.x + dungeonRoomMinX;
+        const maxX = grid.x + grid.width - dungeonRoomMinX;
+        const minY = grid.y + dungeonRoomMinY;
+        const maxY = grid.y + grid.height - dungeonRoomMinY;
+
+        const x = randomIntFromInterval(minX, maxX);
+        const y = randomIntFromInterval(minY, maxY);
+
+
+        const point = {
+            x,
+            y,
+            grid: i,
+        };
+        pointList.push(point);
+    }
+    // draw the points on the board for debugging
+    for (let i = 0; i < pointList.length; i++) {
+        const point = pointList[i];
+        board[point.x][point.y] = point.grid + 1;
+    }
+
+    // get what paths we need to generate - Based on adjacent grids
+    const connectionList = [];
+    for (let i = 0; i < gridList.length; i++) {
+        const grid = gridList[i];
+        // get the adjacent grids
+        const adjacentGrids = getAdjacentGrids(gridList, grid);
+        // for each adjacent grid, use the pointList to link the two points
+        for (let j = 0; j < adjacentGrids.length; j++) {
+            const adjacentGrid = adjacentGrids[j];
+            // get the points for each grid
+            const point1 = pointList.find(point => point.grid === i);
+            const point2 = pointList.find(point => point.grid === adjacentGrid.index);
+            // connect the two points
+            const connection = {
+                point1,
+                point2,
+            };
+            connectionList.push(connection);
+            connectionCoOrdinates.push(connection);
+
+        }
+    }
+    // loop through the connectionList and generate the paths
+    for (let i = 0; i < connectionList.length; i++) {
+        const connection = connectionList[i];
+        const point1 = connection.point1;
+        const point2 = connection.point2;
+        // get the path between the two points
+        const path = getPath(point1, point2);
+        // draw the path on the board
+        for (let j = 0; j < path.length; j++) {
+            const point = path[j];
+            board[point.x][point.y] = 'P';
+        }
+    }
     // for each grid, generate a room
     for (let i = 0; i < gridList.length; i++) {
         const grid = gridList[i];
-        // make sure the room is within the grid and can fit in the grid
-        // if the width or height is too big, then reduce it
-        const roomWidth = randomIntFromInterval(dungeonRoomMinX, Math.min(dungeonRoomMaxX, grid.width));
-        const roomHeight = randomIntFromInterval(dungeonRoomMinY, Math.min(dungeonRoomMaxY, grid.height));
-        const roomX = randomIntFromInterval(grid.x, grid.x + grid.width - roomWidth);
-        const roomY = randomIntFromInterval(grid.y, grid.y + grid.height - roomHeight);
+        // get the points for the grid - there should only be 1 point per grid
+        const point = pointList.filter(p => p.grid === i);
+        // loop until we find a valid position for the room
+        let validPosition = false;
+        let onPoint = false;
+        let roomWidth = randomIntFromInterval(dungeonRoomMinX, dungeonRoomMaxX);
+        let roomHeight = randomIntFromInterval(dungeonRoomMinY, dungeonRoomMaxY);
+        // pick a starting point for the room
+        let roomX = randomIntFromInterval(grid.x, grid.x + grid.width - roomWidth);
+        let roomY = randomIntFromInterval(grid.y, grid.y + grid.height - roomHeight);
+        while (!validPosition) {
+            // check if the room is valid
+            validPosition = true;
+            onPoint = false;
+            for (let x = roomX; x < roomX + roomWidth; x++) {
+                for (let y = roomY; y < roomY + roomHeight; y++) {
+                    // make sure that the room is not out of bounds
+                    if (x < 0 || x >= colCount || y < 0 || y >= rowCount) {
+                        validPosition = false;
+                        break;
+                    }
+                    // make sure that the room is not overlapping with another room
+                    if (board[x][y] > 0) {
+                        validPosition = false;
+                        break;
+                    }
+                    // make sure that it's not escaping the grid
+                    if (x === grid.x || x === grid.x + grid.width - 1 || y === grid.y || y === grid.y + grid.height - 1) {
+                        validPosition = false;
+                        break;
+                    }
+                    // track if the room has intersected with the point
+                    if (x === point[0].x && y === point[0].y) {
+                        onPoint = true;
+                    }
+                }
 
-        // get xy coordinates for a random point on each side of the room, keeping in bounds
-        const roomLeft = {
-            x: roomX,
-            // avoid the corners
-            y: randomIntFromInterval(roomY + 1, roomY + roomHeight - 2),
-        };
-        const roomRight = {
-            x: roomX + roomWidth - 1,
-            y: randomIntFromInterval(roomY + 1, roomY + roomHeight - 2),
-        };
-        const roomTop = {
-            x: randomIntFromInterval(roomX + 1, roomX + roomWidth - 2),
-            y: roomY,
-        };
-        const roomBottom = {
-            x: randomIntFromInterval(roomX + 1, roomX + roomWidth - 2),
-            y: roomY + roomHeight - 1,
-        };
-
-
+            }
+            if (!validPosition || !onPoint) {
+                // regenerate the room size and position
+                roomWidth = randomIntFromInterval(dungeonRoomMinX, dungeonRoomMaxX);
+                roomHeight = randomIntFromInterval(dungeonRoomMinY, dungeonRoomMaxY);
+                roomX = randomIntFromInterval(grid.x, grid.x + grid.width - roomWidth);
+                roomY = randomIntFromInterval(grid.y, grid.y + grid.height - roomHeight);
+                // start the loop again
+                validPosition = false;
+                onPoint = false;
+            }
+            else {
+                break;
+            }
+        }
+        // draw the room on the board
+        for (let x = roomX; x < roomX + roomWidth; x++) {
+            for (let y = roomY; y < roomY + roomHeight; y++) {
+                board[x][y] = i + 1;
+            }
+        }
+        // add the room to the roomList
         const room = {
             x: roomX,
             y: roomY,
             width: roomWidth,
             height: roomHeight,
-            points: {
-                left: roomLeft,
-                right: roomRight,
-                top: roomTop,
-                bottom: roomBottom,
-            },
             grid: i,
+            onPoint,
         };
         roomList.push(room);
-    }
-    printToLog('');
-    for (let i = 0; i < roomList.length; i++) {
-        const room = roomList[i];
-        printToLog(`Room ${i + 1}: ${JSON.stringify(room)}`);
-        printToLog('');
-    }
-    for (let i = 0; i < gridList.length; i++) {
-        const grid = gridList[i];
-        printToLog(`Grid ${i + 1}: ${JSON.stringify(grid)}`);
-        printToLog('');
+
+        // print the room to the log
+        printToLog(`Room ${i + 1} - x: ${roomX}, y: ${roomY}, width: ${roomWidth}, height: ${roomHeight}, onPoint: ${onPoint}`);
     }
 
-
-    // transfer the roomList into the board
-    for (let i = 0; i < roomList.length; i++) {
-        const room = roomList[i];
-        for (let j = room.x; j < room.x + room.width; j++) {
-            for (let k = room.y; k < room.y + room.height; k++) {
-                // set the board number to whatever grid it's in
-                board[j][k] = i + 1;
-            }
-        }
-    }
-
-
-    // create a list of all the possible connections between adjacent rooms by checking the roomList
-    const connectionList = [];
-    for (let i = 0; i < roomList.length; i++) {
-        const room = roomList[i];
-        // loop through each room to see what one is adjacent to it
-        for (let j = 0; j < roomList.length; j++) {
-            const otherRoom = roomList[j];
-            // check if the other room is to the right
-            if (otherRoom.x >= room.x + room.width) {
-                // make sure both rooms are on the same y level via the gridList
-                const grid1 = gridList[room.grid];
-                const grid2 = gridList[otherRoom.grid];
-                if (grid1.y === grid2.y && grid2.x === grid1.x + grid1.width) {
-                    const connection = {
-                        room1: roomList[i],
-                        room2: roomList[j],
-                        isRight: true,
-                    };
-                    connectionList.push(connection);
-                }
-
-
-            }
-            // check if the other room is underneath
-            if (otherRoom.y >= room.y + room.height) {
-                // make sure both rooms are on the same x level via the gridList
-                const grid1 = gridList[room.grid];
-                const grid2 = gridList[otherRoom.grid];
-                if (grid1.x === grid2.x && grid2.y === grid1.y + grid1.height) {
-                    const connection = {
-                        room1: roomList[i],
-                        room2: roomList[j],
-                        isRight: false,
-                    };
-                    connectionList.push(connection);
-                }
-            }
-
-        }
-    }
-    // split the connectionList per connection for debugging
-    for (let i = 0; i < connectionList.length; i++) {
-        const connection = connectionList[i];
-        printToLog(`Connection ${i + 1}: ${JSON.stringify(connection)}`);
-        printToLog('');
-    }
-    // pathfind between each room and update the board with the returned board
-    for (let i = 0; i < connectionList.length; i++) {
-        const connection = connectionList[i];
-        const { newBoard, room1Point, room2Point } = pathFind(board, gridList, connection.room1, connection.room2, connection.isRight);
-        // update the board with the returned newBoard
-        board = newBoard;
-        // for now as well, just add the points to the arrowCoOrdinates array
-        connectionCoOrdinates.push({ room1Point, room2Point });
-    }
 
     // cache everything we need to redraw the board
     redrawBoard = board;
@@ -354,6 +371,7 @@ function drawBoard(colCount, rowCount, gridList, board, highlight) {
                 case 'B':
                 case 'R':
                 case 'L':
+                case 'P':
                     ctx.fillStyle = 'rgba(142, 182, 223, 0.85)';
                     break;
                 case 'S':
@@ -389,8 +407,8 @@ function drawBoard(colCount, rowCount, gridList, board, highlight) {
     if (drawRoomLinks) {
         // draw the room links
         for (let i = 0; i < connectionCoOrdinates.length; i++) {
-            const point1 = connectionCoOrdinates[i].room1Point;
-            const point2 = connectionCoOrdinates[i].room2Point;
+            const point1 = connectionCoOrdinates[i].point1;
+            const point2 = connectionCoOrdinates[i].point2;
             ctx.beginPath();
             ctx.moveTo(point1.x * cellSize + (cellSize / 2), point1.y * cellSize + (cellSize / 2));
             ctx.lineTo(point2.x * cellSize + (cellSize / 2), point2.y * cellSize + (cellSize / 2));
@@ -441,7 +459,6 @@ function drawBoard(colCount, rowCount, gridList, board, highlight) {
 
                 // if it is, we highlight the whole connection
                 if (connection) {
-                    console.log('found connection');
                     // get the connection points
                     const connectionPoints = getCellsInConnection(row, col);
                     // highlight all the cells in the connection
@@ -487,6 +504,114 @@ function drawBoard(colCount, rowCount, gridList, board, highlight) {
 
 }
 
+function getPath(point1, point2) {
+    // get the start and end points
+    const startPoint = point1;
+    const endPoint = point2;
+    // get the start and end x and y values
+    const startX = startPoint.x;
+    const startY = startPoint.y;
+    const endX = endPoint.x;
+    const endY = endPoint.y;
+    // get the difference between the start and end x and y values
+    const xDiff = endX - startX;
+    const yDiff = endY - startY;
+    // if the x difference is greater than the y difference, we move in the x direction
+    // otherwise we move in the y direction
+    const path = [];
+    if (xDiff > yDiff) {
+        // for the first half of the path, we move in the x direction
+        for (let i = 0; i < Math.abs(xDiff) / 2; i++) {
+            if (xDiff > 0) {
+                path.push({ x: startX + i, y: startY });
+            }
+            else {
+                path.push({ x: startX - i, y: startY });
+            }
+        }
+        // we then do all needed y movements (assuming we're not moving in a straight line)
+        if (yDiff !== 0) {
+            for (let i = 1; i <= Math.abs(yDiff); i++) {
+                // we're going to slightly cheat here and just use whatever was the last path entry to get the correct x value
+                if (yDiff > 0) {
+                    path.push({ x: path[path.length - 1].x, y: startY + i });
+                }
+                else {
+                    path.push({ x: path[path.length - 1].x, y: startY - i });
+                }
+            }
+        }
+        // then we do the second half of the x movements
+        for (let i = path[path.length - 1].x; i < Math.abs(endX); i++) {
+            if (xDiff > 0) {
+                path.push({ x: i + 1, y: endY });
+            }
+            else {
+                path.push({ x: i - 1, y: endY });
+            }
+        }
+        return path;
+    }
+    else {
+        // for the first half of the path, we move in the y direction
+        for (let i = 0; i < Math.abs(yDiff) / 2; i++) {
+            if (yDiff > 0) {
+                path.push({ x: startX, y: startY + i });
+            }
+            else {
+                path.push({ x: startX, y: startY - i });
+            }
+        }
+        // we then do all needed x movements (assuming we're not moving in a straight line)
+        if (xDiff !== 0) {
+            for (let i = 1; i <= Math.abs(xDiff); i++) {
+                // we're going to slightly cheat here and just use whatever was the last path entry to get the correct y value
+                if (xDiff > 0) {
+                    path.push({ x: startX + i, y: path[path.length - 1].y });
+                }
+                else {
+                    path.push({ x: startX - i, y: path[path.length - 1].y });
+                }
+            }
+        }
+        // then we do the second half of the y movements
+        for (let i = path[path.length - 1].y; i < Math.abs(endY); i++) {
+            if (yDiff > 0) {
+                path.push({ x: endX, y: i + 1 });
+            }
+            else {
+                path.push({ x: endX, y: i - 1 });
+            }
+        }
+        // return the path
+        return path;
+    }
+}
+
+/**
+ * when given a grid, return an array of all the adjacent grids
+ * @param {array} gridList
+ * @param {object} grid
+ * @returns {array}
+ * */
+function getAdjacentGrids(gridList, grid) {
+    // adjacent grids will have the same x or y value as the grid
+    const adjacentGrids = [];
+    for (const selectedGrid of gridList) {
+        const sameX = selectedGrid.x === grid.x;
+        const sameY = selectedGrid.y === grid.y;
+
+        const nextX = selectedGrid.x === grid.x + grid.width;
+        const nextY = selectedGrid.y === grid.y + grid.height;
+        // as all calcs are done both to the right and down for all grids, we don't need to check behind
+        if (sameX && nextY || sameY && nextX) {
+            adjacentGrids.push(selectedGrid);
+        }
+
+    }
+    return adjacentGrids;
+}
+
 /**
  * Using the redrawRoomlist var, print back an array of all cell numbers in the room
  * @param {number} roomNumber
@@ -520,13 +645,13 @@ function getCellsInConnection(x, y) {
     // loop through the connectionCoOrdinates array
     for (let i = 0; i < connectionCoOrdinates.length; i++) {
         // check if the cell is a connection
-        if (connectionCoOrdinates[i].room1Point.x === x && connectionCoOrdinates[i].room1Point.y === y) {
+        if (connectionCoOrdinates[i].point1.x === x && connectionCoOrdinates[i].point1.y === y) {
             // add the room 2 point to the array
-            cellsInConnection.push(connectionCoOrdinates[i].room2Point);
+            cellsInConnection.push(connectionCoOrdinates[i].point2);
         }
-        if (connectionCoOrdinates[i].room2Point.x === x && connectionCoOrdinates[i].room2Point.y === y) {
+        if (connectionCoOrdinates[i].point2.x === x && connectionCoOrdinates[i].point2.y === y) {
             // add the room 1 point to the array
-            cellsInConnection.push(connectionCoOrdinates[i].room1Point);
+            cellsInConnection.push(connectionCoOrdinates[i].point1);
         }
     }
     // return the array
@@ -543,10 +668,10 @@ function checkIfConnection(x, y) {
     // loop through the connectionCoOrdinates array
     for (let i = 0; i < connectionCoOrdinates.length; i++) {
         // check if the cell is a connection
-        if (connectionCoOrdinates[i].room1Point.x === x && connectionCoOrdinates[i].room1Point.y === y) {
+        if (connectionCoOrdinates[i].point1.x === x && connectionCoOrdinates[i].point1.y === y) {
             return true;
         }
-        if (connectionCoOrdinates[i].room2Point.x === x && connectionCoOrdinates[i].room2Point.y === y) {
+        if (connectionCoOrdinates[i].point2.x === x && connectionCoOrdinates[i].point2.y === y) {
             return true;
         }
     }
@@ -569,12 +694,6 @@ function drawPopup(popupInfo, ctx) {
     const x = mousePosition.x - rect.left;
     const y = mousePosition.y - rect.top;
     // calculate the cell size
-    const maxCellWidth = dungeonCanvas.width / redrawColCount;
-    const maxCellHeight = dungeonCanvas.height / redrawRowCount;
-    const cellSize = maxCellHeight > maxCellWidth ? Math.floor(maxCellWidth) : Math.floor(maxCellHeight);
-    // calculate the row and column
-    const row = Math.floor(x / cellSize);
-    const col = Math.floor(y / cellSize);
 
     let popupXAdjustment = 20;
     let popupYAdjustment = 15;
@@ -582,7 +701,6 @@ function drawPopup(popupInfo, ctx) {
     // if the mouse is too close to the right, adjust popupXAdjustment to the left
     if (x + popupXAdjustment + 200 > dungeonCanvas.width) {
         popupXAdjustment = -200;
-        // and change the text alignment to the right
         ctx.textAlign = 'right';
     }
     // if the mouse is too close to the bottom, adjust popupYAdjustment to the top
@@ -625,295 +743,20 @@ dungeonCanvas.addEventListener('mousemove', (e) => {
     redrawDungeon();
 });
 
-
-/**
- * A function that attempts to find a path between two rooms by only moving in straight lines
- * @param {number[][]} board The 2D array that represents the dungeon
- * @param {Object} room1 The room object that represents the starting room
- * @param {Object} room2 The room object that represents the ending room
- * @param {boolean} isRight A boolean that represents if we are pathfinding to the right or down
- * @returns {number[][]} A new 2D array that represents the dungeon with the path drawn
- */
-function pathFind(board, gridList, room1, room2, isRight) {
-    // we're going to program in some randomness as we don't want the path to be the same every time
-    // create a new 2d array that is a copy of the board
-    const newBoard = board.map(arr => arr.slice());
-    // get the previously generated points from each room
-    const room1Points = room1.points;
-    const room2Points = room2.points;
-
-
-    // draw each generated point on the board, labelled with a letter for debugging purposes
-    // as long as there's a number in the spot first
-    drawDebug();
-
-
-    if (isRight) {
-        printToLog(`Connecting from room ${room1.grid} to room ${room2.grid}`);
-
-        // track a couple of important deciders
-        // if the lowest point of the bottom of room1 is higher than the highest point of the top of room2
-        const isRoom1BottomHigher = room1Points.bottom.y < room2Points.top.y;
-        printToLog(`Room 1 Bottom Higher: ${isRoom1BottomHigher}`);
-        // if the highest point of the top of room1 is lower than the lowest point of the bottom of room2
-        const isRoom1TopLower = room1Points.top.y > room2Points.bottom.y;
-        printToLog(`Room 1 Top Lower: ${isRoom1TopLower}`);
-        // if the right point of the right of room1 is directly next to the left point of the left of room2
-        const isRoom1RightNextToRoom2Left = room1Points.right.x + 1 === room2Points.left.x;
-        printToLog(`Room 1 Right Next to Room 2 Left: ${isRoom1RightNextToRoom2Left}`);
-        // if the top point of either room is on the edge of the board
-        const isRoom1TopOnEdge = room1Points.top.y === 0;
-        const isRoom2TopOnEdge = room2Points.top.y === 0;
-        printToLog(`Room 1 Top On Edge: ${isRoom1TopOnEdge}`);
-        printToLog(`Room 2 Top On Edge: ${isRoom2TopOnEdge}`);
-        // if the bottom point of either room is on the edge of the board
-        const isRoom1BottomOnEdge = room1Points.bottom.y === board[0].length - 1;
-        const isRoom2BottomOnEdge = room2Points.bottom.y === board[0].length - 1;
-        printToLog(`Room 1 Bottom On Edge: ${isRoom1BottomOnEdge}`);
-        printToLog(`Room 2 Bottom On Edge: ${isRoom2BottomOnEdge}`);
-
-
-        const room1ValidPoints = [];
-        const room1ValidPointsLabels = new Set();
-        const room2ValidPoints = [];
-        const room2ValidPointsLabels = new Set();
-
-        // by default, allow all
-        room1ValidPointsLabels.add('top');
-        room1ValidPointsLabels.add('right');
-        room1ValidPointsLabels.add('bottom');
-        // room 2 can use TLB
-        room2ValidPointsLabels.add('top');
-        room2ValidPointsLabels.add('left');
-        room2ValidPointsLabels.add('bottom');
-
-        // if the top of room1 is on the edge, we can't use it
-        if (isRoom1TopOnEdge) {
-            room1ValidPointsLabels.delete('top');
-        }
-        // if the bottom of room1 is on the edge, we can't use it
-        if (isRoom1BottomOnEdge) {
-            room1ValidPointsLabels.delete('bottom');
-        }
-        // if the top of room2 is on the edge, we can't use it
-        if (isRoom2TopOnEdge) {
-            room2ValidPointsLabels.delete('top');
-        }
-        // if the bottom of room2 is on the edge, we can't use it
-        if (isRoom2BottomOnEdge) {
-            room2ValidPointsLabels.delete('bottom');
-        }
-        // if the lowest point of the bottom of room1 is higher than the highest point of the top of room2
-        if (isRoom1BottomHigher) {
-            // we can't use the top of room1
-            room1ValidPointsLabels.delete('top');
-            // we can't use the bottom of room2
-            room2ValidPointsLabels.delete('bottom');
-        }
-        // if the highest point of the top of room1 is lower than the lowest point of the bottom of room2
-        if (isRoom1TopLower) {
-            // we can't use the bottom of room1
-            room1ValidPointsLabels.delete('bottom');
-            // we can't use the top of room2
-            room2ValidPointsLabels.delete('top');
-        }
-        // if the right point of the right of room1 is directly next to the left point of the left of room2
-        if (isRoom1RightNextToRoom2Left) {
-            // bypass the valid points check, we will use these all the time
-            room1ValidPoints.push(room1Points.left);
-            room2ValidPoints.push(room2Points.left);
-        }
-
-        // if we haven't bypassed the valid points check, we need to translate the labels into actual points
-        if (room1ValidPoints.length === 0) {
-            room1ValidPointsLabels.forEach(label => {
-                room1ValidPoints.push(room1Points[label]);
-            });
-        }
-        if (room2ValidPoints.length === 0) {
-            room2ValidPointsLabels.forEach(label => {
-                room2ValidPoints.push(room2Points[label]);
-            });
-        }
-
-
-        // we're going to randomly pick a point from room1
-        const room1Point = room1ValidPoints[Math.floor(Math.random() * room1ValidPoints.length)];
-
-        // room2's point will be dependent on the point we picked from room1, depending on the location of the point
-        // the wider the y gap between room1point and room2point, the less likely we are to choose it
-
-        const room2Point = weightedSelectionOfConnectionPointRight(room2ValidPoints, room1Point);
-        // print out what these points are according to the board
-        printToLog(`room1Point currently ${board[room1Point.x][room1Point.y]}`);
-        printToLog(`room2Point currently ${board[room2Point.x][room2Point.y]}`);
-
-
-        // draw the points on the board
-        newBoard[room1Point.x][room1Point.y] = 'S';
-        newBoard[room2Point.x][room2Point.y] = 'F';
-
-        // also print the points
-
-        printToLog(`room1Point: ${room1Point.x}, ${room1Point.y}`);
-        printToLog(`room2Point: ${room2Point.x}, ${room2Point.y}`);
-        printToLog('');
-
-        return { newBoard, room1Point, room2Point };
+document.addEventListener('mousemove', (e) => {
+    // store the mouse position globally
+    mousePosition = { x: e.clientX, y: e.clientY };
+    // if the mouse is not over the canvas, don't draw the popup
+    if (mousePosition.x < dungeonCanvas.offsetLeft || mousePosition.x > dungeonCanvas.offsetLeft + dungeonCanvas.width) {
+        pointsOfInterest = [];
+        redrawDungeon();
     }
-    else {
-        printToLog(`Connecting from room ${room1.grid} to room ${room2.grid}`);
-
-        // we don't need to track as many deciders as we do for the right pathfinding
-        // if the left side of room2 is blocked by the boundary of its slot in the gridList
-        const isRoom2LeftBlocked = room2Points.left.x === gridList[room2.grid].x;
-        printToLog(`Room 2 Left Blocked: ${isRoom2LeftBlocked}`);
-        // if the right side of room2 is blocked by the boundary of its slot in the gridList
-        const isRoom2RightBlocked = room2Points.right.x === gridList[room2.grid].x + gridList[room2.grid].width - 1;
-        printToLog(`Room 2 Right Blocked: ${isRoom2RightBlocked}`);
-
-        const room1ValidPoints = [];
-        const room2ValidPoints = [];
-
-        // for now, room1 can ONLY use B
-        room1ValidPoints.push(room1Points.bottom);
-
-        // if the left side of room2 is blocked
-        if (isRoom2LeftBlocked) {
-            // room 2 can ONLY use TR
-            room2ValidPoints.push(room2Points.right);
-        }
-        // if the right side of room2 is blocked
-        else if (isRoom2RightBlocked) {
-            // room 2 can ONLY use TL
-            room2ValidPoints.push(room2Points.left);
-        }
-        // if neither side of room2 is blocked
-        else {
-            // room 2 can use TLR
-            room2ValidPoints.push(room2Points.left);
-            room2ValidPoints.push(room2Points.right);
-        }
-
-        // we're going to randomly pick a point from room1
-        const room1Point = room1ValidPoints[Math.floor(Math.random() * room1ValidPoints.length)];
-
-        // room2's point is determenistic - a fixed 85% chance of using the top point, 15% chance of using the other two points
-        let room2Point;
-        const random = Math.random();
-        if (random < 0.85) {
-            room2Point = room2Points.top;
-        }
-        else {
-            room2Point = room2ValidPoints[Math.floor(Math.random() * room2ValidPoints.length)];
-        }
-        newBoard[room1Point.x][room1Point.y] = 'S';
-        newBoard[room2Point.x][room2Point.y] = 'F';
-
-        // also print the points
-        printToLog(`room1Point: ${room1Point.x}, ${room1Point.y}`);
-        printToLog(`room2Point: ${room2Point.x}, ${room2Point.y}`);
-
-
-        printToLog('');
-        return { newBoard, room1Point, room2Point };
-    }
-    function weightedSelectionOfConnectionPointRight(room2ValidPoints, room1Point) {
-        const room2Chances = [];
-        let room2Point;
-        for (let i = 0; i < room2ValidPoints.length; i++) {
-            // if the points are the same, we're going to use it
-            if (room1Point.x === room2ValidPoints[i].x && room1Point.y === room2ValidPoints[i].y) {
-                room2Point = room2ValidPoints[i];
-                break;
-            }
-
-            // if the points are not the same, we're going to calculate the y gap
-            else {
-                const yGap = Math.abs(room1Point.y - room2ValidPoints[i].y);
-                // the wider the gap, the less likely we are to choose it
-                room2Chances.push({ room: room2ValidPoints[i], chance: yGap });
-            }
-        }
-
-        // if we haven't chosen a point yet, time to calculate the chances
-        if (!room2Point) {
-            // combine all the chances into one number
-            const totalChances = room2Chances.reduce((acc, cur) => acc + cur.chance, 0);
-            const probabilities = [];
-            for (let i = 0; i < room2Chances.length; i++) {
-                // calculate the probability of each point being chosen, this is a exponential function that decreases as the y gap increases
-                // thank you chatGPT for the help with this
-                const probability = Math.exp(-0.25 * room2Chances[i].chance) / totalChances;
-                if (probability === 0) {
-                    probabilities.push(0.5);
-                }
-                else {
-                    probabilities.push(probability);
-                }
-
-            }
-
-            // pick a random point based on the probabilities
-            const randomIndex = pickItem(probabilities);
-            // make sure that we're not picking a point that's larger than the array
-            room2Point = room2Chances[randomIndex].room || room2Chances[0].room;
-        }
-        return room2Point;
-    }
-
-    function pickItem(probabilities) {
-        // Keep a running total of the probabilities
-        let runningTotal = 0;
-
-        // Iterate through the probability array
-        for (let i = 0; i < probabilities.length; i++) {
-            runningTotal += probabilities[i];
-        }
-        // Pick a random number between 0 and the running total (this stops us picking something outside the array)
-        const random = Math.random() * runningTotal;
-        let current = 0;
-
-        // Iterate through the probability array again
-        for (let i = 0; i < probabilities.length; i++) {
-            current += probabilities[i];
-            if (random <= current) {
-                return i;
-            }
-        }
-    }
-
-
-    function drawDebug() {
-        // x THEN y
-        if (typeof newBoard[room1Points.top.x][room1Points.top.x] === 'number') {
-            newBoard[room1Points.top.x][room1Points.top.y] = 'T';
-        }
-        if (typeof newBoard[room1Points.bottom.x][room1Points.bottom.y] === 'number') {
-            newBoard[room1Points.bottom.x][room1Points.bottom.y] = 'B';
-        }
-        if (typeof newBoard[room1Points.left.x][room1Points.left.y] === 'number') {
-            newBoard[room1Points.left.x][room1Points.left.y] = 'L';
-        }
-        if (typeof newBoard[room1Points.right.x][room1Points.right.y] === 'number') {
-            newBoard[room1Points.right.x][room1Points.right.y] = 'R';
-        }
-
-        if (typeof newBoard[room2Points.top.x][room2Points.top.y] === 'number') {
-            newBoard[room2Points.top.x][room2Points.top.y] = 'T';
-        }
-        if (typeof newBoard[room2Points.bottom.x][room2Points.bottom.y] === 'number') {
-            newBoard[room2Points.bottom.x][room2Points.bottom.y] = 'B';
-        }
-        if (typeof newBoard[room2Points.left.x][room2Points.left.y] === 'number') {
-            newBoard[room2Points.left.x][room2Points.left.y] = 'L';
-        }
-        if (typeof newBoard[room2Points.right.x][room2Points.right.y] === 'number') {
-            newBoard[room2Points.right.x][room2Points.right.y] = 'R';
-        }
+    else if (mousePosition.y < dungeonCanvas.offsetTop || mousePosition.y > dungeonCanvas.offsetTop + dungeonCanvas.height) {
+        pointsOfInterest = [];
+        redrawDungeon();
 
     }
-}
+});
 
 
 document.addEventListener('input', event => {
